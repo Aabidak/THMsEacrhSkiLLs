@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SearchSkills Challenge</title>
+
+<style>
+  body {
+    margin: 0;
+    font-family: "Courier New", monospace;
+    background: #000;
+    color: #0ff;
+    text-align: center;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: auto;
+    padding: 20px;
+  }
+
+  h1 {
+    font-size: 2.4rem;
+    text-shadow: 0 0 12px #0ff;
+  }
+
+  h2 {
+    margin-top: 30px;
+    text-shadow: 0 0 10px #0ff;
+  }
+
+  .card {
+    border: 1px solid #0ff;
+    border-radius: 12px;
+    padding: 15px;
+    margin-top: 15px;
+    background: rgba(0, 255, 255, 0.05);
+    text-align: left;
+  }
+
+  .card p {
+    margin: 0 0 10px;
+    font-size: 15px;
+  }
+
+  input, textarea, button, select {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    border-radius: 10px;
+    border: 1px solid #0ff;
+    background: rgba(0,0,0,0.8);
+    color: #0ff;
+    font-size: 14px;
+    outline: none;
+  }
+
+  button {
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  button:hover {
+    box-shadow: 0 0 15px #0ff;
+  }
+
+  .msg {
+    margin-top: 8px;
+    font-size: 14px;
+  }
+
+  .success { color: #3cff9a; }
+  .error { color: #ff6b6b; }
+
+  .rewardBox {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid #00ff99;
+    border-radius: 10px;
+    background: rgba(0, 255, 153, 0.08);
+    color: #00ff99;
+    font-weight: bold;
+    text-shadow: 0 0 10px #00ff99;
+  }
+
+  .adminBox {
+    border: 1px solid #ff00ff;
+    padding: 15px;
+    border-radius: 12px;
+    margin-top: 25px;
+    background: rgba(255, 0, 255, 0.05);
+  }
+
+  .hidden { display: none; }
+</style>
+</head>
+
+<body>
+<div class="container">
+  <h1>🔍 SearchSkills Challenge</h1>
+  <p>Submit flags in format: <b>flag{...}</b></p>
+
+  <!-- EASY -->
+  <h2>🟢 Easy</h2>
+  <div id="easyArea"></div>
+
+  <!-- MEDIUM -->
+  <h2>🟡 Medium</h2>
+  <div id="mediumArea"></div>
+
+  <!-- HARD -->
+  <h2>🔴 Hard</h2>
+  <div id="hardArea"></div>
+
+  <!-- ADMIN PANEL -->
+  <div class="adminBox">
+    <h2 style="color:#ff00ff;">Admin Login</h2>
+
+    <input id="adminEmail" placeholder="Admin Email">
+    <input id="adminPass" type="password" placeholder="Admin Password">
+    <button onclick="adminLogin()">Login as Admin</button>
+
+    <div class="msg" id="adminMsg"></div>
+
+    <div id="adminPanel" class="hidden">
+      <h2 style="color:#ff00ff;">⚙ Admin Panel</h2>
+
+      <select id="adminChallenge">
+        <option value="easy_0">easy_0</option>
+        <option value="easy_1">easy_1</option>
+        <option value="easy_2">easy_2</option>
+
+        <option value="medium_0">medium_0</option>
+        <option value="medium_1">medium_1</option>
+        <option value="medium_2">medium_2</option>
+
+        <option value="hard_0">hard_0</option>
+        <option value="hard_1">hard_1</option>
+        <option value="hard_2">hard_2</option>
+      </select>
+
+      <textarea id="adminQuestion" placeholder="Question text"></textarea>
+      <input id="adminAnswer" placeholder="Correct Answer flag{...}">
+      <input id="adminReward" placeholder="Reward Flag (CTF{...})">
+      <input id="adminPoints" type="number" placeholder="Points">
+
+      <button onclick="saveChallenge()">Save / Update</button>
+      <button onclick="adminLogout()">Logout Admin</button>
+
+      <div class="msg" id="saveMsg"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getAuth,
+    signInWithEmailAndPassword,
+    signOut,
+    signInAnonymously
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  import {
+    getFirestore,
+    doc,
+    setDoc,
+    getDoc,
+    getDocs,
+    collection,
+    addDoc
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // FIREBASE CONFIG
+  const firebaseConfig = {
+    apiKey: "AIzaSyCkblbbA7iZmiGr617-KZB8Yd3H3a2Aq4M",
+    authDomain: "ctfscoreboard-3af1b.firebaseapp.com",
+    projectId: "ctfscoreboard-3af1b",
+    appId: "1:211208589328:web:b29525a3986275abf73a95"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  let adminUser = null;
+
+  function showMsg(id, msg, type) {
+    const el = document.getElementById(id);
+    el.innerText = msg;
+    el.className = "msg " + type;
+  }
+
+  // AUTO SIGN IN STUDENTS ANONYMOUSLY
+  async function autoAnonLogin() {
+    try {
+      await signInAnonymously(auth);
+      console.log("Anonymous login success");
+    } catch (err) {
+      console.log("Anon error:", err.message);
+    }
+  }
+
+  autoAnonLogin();
+
+  // LOAD ALL QUESTIONS
+  async function loadAllChallenges() {
+    const easyArea = document.getElementById("easyArea");
+    const mediumArea = document.getElementById("mediumArea");
+    const hardArea = document.getElementById("hardArea");
+
+    easyArea.innerHTML = "";
+    mediumArea.innerHTML = "";
+    hardArea.innerHTML = "";
+
+    const snap = await getDocs(collection(db, "searchskills_questions"));
+
+    let list = [];
+    snap.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
+
+    list.sort((a, b) => a.id.localeCompare(b.id));
+
+    list.forEach(q => {
+      const div = document.createElement("div");
+      div.className = "card";
+
+      div.innerHTML = `
+        <p><b>${q.id.toUpperCase()}</b> (${q.points || 0} pts)</p>
+        <p>${q.question || "No question set yet."}</p>
+        <input id="flag_${q.id}" placeholder="Answer Here">
+        <button onclick="submitFlag('${q.id}')">Submit</button>
+        <div class="msg" id="msg_${q.id}"></div>
+      `;
+
+      if (q.id.startsWith("easy")) easyArea.appendChild(div);
+      if (q.id.startsWith("medium")) mediumArea.appendChild(div);
+      if (q.id.startsWith("hard")) hardArea.appendChild(div);
+    });
+  }
+
+  // SUBMIT FLAG
+  window.submitFlag = async function(challengeId) {
+    const input = document.getElementById("flag_" + challengeId).value.trim();
+    const msgBox = document.getElementById("msg_" + challengeId);
+
+    if (!input) {
+      msgBox.innerText = "Enter a flag!";
+      msgBox.className = "msg error";
+      return;
+    }
+
+    try {
+      const ref = doc(db, "searchskills_questions", challengeId);
+      const snap = await getDoc(ref);
+
+      if (!snap.exists()) {
+        msgBox.innerText = "Challenge not found.";
+        msgBox.className = "msg error";
+        return;
+      }
+
+      const data = snap.data();
+      const correct = (data.answer || "").trim();
+      const pts = data.points || 0;
+      const rewardFlag = (data.rewardFlag || "CTF{NOT_SET}").trim();
+
+      if (input === correct) {
+        msgBox.innerHTML = `
+          <div class="success">Correct ✅ +${pts} pts</div>
+          <div class="rewardBox">${rewardFlag}</div>
+        `;
+        msgBox.className = "msg success";
+
+        await addDoc(collection(db, "searchskills_submissions"), {
+          challengeId,
+          flag: input,
+          correct: true,
+          points: pts,
+          rewardFlag: rewardFlag,
+          time: Date.now()
+        });
+
+      } else {
+        msgBox.innerText = "Wrong ❌";
+        msgBox.className = "msg error";
+
+        await addDoc(collection(db, "searchskills_submissions"), {
+          challengeId,
+          flag: input,
+          correct: false,
+          points: 0,
+          time: Date.now()
+        });
+      }
+
+    } catch (err) {
+      msgBox.innerText = "Error: " + err.message;
+      msgBox.className = "msg error";
+    }
+  };
+
+  // LOAD CHALLENGE DATA FOR EDITING
+  async function loadChallengeForEdit() {
+    if (!adminUser) return;
+
+    const cid = document.getElementById("adminChallenge").value;
+
+    try {
+      const snap = await getDoc(doc(db, "searchskills_questions", cid));
+
+      if (snap.exists()) {
+        const data = snap.data();
+
+        document.getElementById("adminQuestion").value = data.question || "";
+        document.getElementById("adminAnswer").value = data.answer || "";
+        document.getElementById("adminReward").value = data.rewardFlag || "";
+        document.getElementById("adminPoints").value = data.points || 0;
+
+        showMsg("saveMsg", "Loaded: " + cid + " ✅", "success");
+      } else {
+        document.getElementById("adminQuestion").value = "";
+        document.getElementById("adminAnswer").value = "";
+        document.getElementById("adminReward").value = "";
+        document.getElementById("adminPoints").value = "";
+
+        showMsg("saveMsg", "No data found for " + cid, "error");
+      }
+    } catch (err) {
+      showMsg("saveMsg", "ERROR: " + err.message, "error");
+    }
+  }
+
+  // ADMIN LOGIN
+  window.adminLogin = async function() {
+    const email = document.getElementById("adminEmail").value.trim();
+    const pass = document.getElementById("adminPass").value.trim();
+
+    try {
+      const res = await signInWithEmailAndPassword(auth, email, pass);
+      adminUser = res.user;
+
+      showMsg("adminMsg", "Admin logged in ✅", "success");
+      document.getElementById("adminPanel").classList.remove("hidden");
+
+      loadChallengeForEdit();
+
+    } catch (err) {
+      showMsg("adminMsg", "ERROR: " + err.message, "error");
+    }
+  };
+
+  // ADMIN LOGOUT
+  window.adminLogout = async function() {
+    await signOut(auth);
+    adminUser = null;
+
+    document.getElementById("adminPanel").classList.add("hidden");
+    showMsg("adminMsg", "Admin logged out.", "success");
+
+    autoAnonLogin();
+  };
+
+  // SAVE / UPDATE CHALLENGE
+  window.saveChallenge = async function() {
+    if (!adminUser) {
+      showMsg("saveMsg", "Admin not logged in!", "error");
+      return;
+    }
+
+    const cid = document.getElementById("adminChallenge").value;
+    const question = document.getElementById("adminQuestion").value.trim();
+    const answer = document.getElementById("adminAnswer").value.trim();
+    const rewardFlag = document.getElementById("adminReward").value.trim();
+    const points = parseInt(document.getElementById("adminPoints").value.trim());
+
+    if (!question || !answer || !rewardFlag || isNaN(points)) {
+      showMsg("saveMsg", "Fill question, answer, reward flag and points!", "error");
+      return;
+    }
+
+    try {
+      await setDoc(doc(db, "searchskills_questions", cid), {
+        question,
+        answer,
+        rewardFlag,
+        points
+      });
+
+      showMsg("saveMsg", "Saved Successfully ✅", "success");
+      loadAllChallenges();
+
+    } catch (err) {
+      showMsg("saveMsg", "ERROR: " + err.message, "error");
+    }
+  };
+
+  // AUTO LOAD QUESTION WHEN ADMIN CHANGES DROPDOWN
+  document.getElementById("adminChallenge").addEventListener("change", loadChallengeForEdit);
+
+  // LOAD CHALLENGES FIRST TIME
+  loadAllChallenges();
+</script>
+</body>
+</html>
